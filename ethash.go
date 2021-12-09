@@ -125,13 +125,13 @@ type Light struct {
 }
 
 // Verify checks whether the block's nonce is valid.
-func (l *Light) Verify(block Block) (bool, common.Hash) {
+func (l *Light) Verify(block Block) (common.Hash, error) {
 	// TODO: do ethash_quick_verify before getCache in order
 	// to prevent DOS attacks.
 	blockNum := block.NumberU64()
 	if blockNum >= epochLength*2048 {
-		log.Debug(fmt.Sprintf("block number %d too high, limit is %d", epochLength*2048))
-		return false, common.Hash{}
+		log.Debug(fmt.Sprintf("block number %d too high, limit is %d", blockNum, epochLength*2048))
+		return common.Hash{}, fmt.Errorf("block number %d too high, limit is %d", blockNum, epochLength*2048)
 	}
 
 	difficulty := block.Difficulty()
@@ -141,8 +141,7 @@ func (l *Light) Verify(block Block) (bool, common.Hash) {
 	   Ethereum protocol consensus rules here which are not in scope of Ethash
 	*/
 	if difficulty.Cmp(common.Big0) == 0 {
-		log.Debug("invalid block difficulty")
-		return false, common.Hash{}
+		return common.Hash{}, fmt.Errorf("invalid block difficulty: 0")
 	}
 
 	cache := l.getCache(blockNum)
@@ -153,17 +152,20 @@ func (l *Light) Verify(block Block) (bool, common.Hash) {
 	// Recompute the hash using the cache.
 	ok, mixDigest, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
 	if !ok {
-		return false, common.Hash{}
+		return common.Hash{}, fmt.Errorf("unable to compute hash")
 	}
 
 	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
 	if block.MixDigest() != mixDigest {
-		return false, common.Hash{}
+		return common.Hash{}, fmt.Errorf("mixdigest has been manipulated")
 	}
 
 	// The actual check.
 	target := new(big.Int).Div(maxUint256, difficulty)
-	return result.Big().Cmp(target) <= 0, result
+	if result.Big().Cmp(target) > 0 {
+		return result, fmt.Errorf("result did not meet target difficulty")
+	}
+	return result, nil
 }
 
 func h256ToHash(in C.ethash_h256_t) common.Hash {

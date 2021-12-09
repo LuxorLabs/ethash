@@ -28,7 +28,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func init() {
@@ -79,16 +78,16 @@ var validBlocks = []*testBlock{
 
 var invalidZeroDiffBlock = testBlock{
 	number:      61440000,
-	hashNoNonce: crypto.Sha3Hash([]byte("foo")),
+	hashNoNonce: common.HexToHash("5fc898f16035bf5ac9c6d9077ae1e3d5fc1ecc3c9fd5bee8bb00e810fdacbaa0"),
 	difficulty:  big.NewInt(0),
 	nonce:       0xcafebabec00000fe,
-	mixDigest:   crypto.Sha3Hash([]byte("bar")),
+	mixDigest:   common.HexToHash("ab546a5b73c452ae86dadd36f0ed83a6745226717d3798832d1b20b489e82063"),
 }
 
 func TestEthashVerifyValid(t *testing.T) {
 	eth := New()
 	for i, block := range validBlocks {
-		if ok, _ := eth.Verify(block); !ok {
+		if _, err := eth.Verify(block); err != nil {
 			t.Errorf("block %d (%x) did not validate.", i, block.hashNoNonce[:6])
 		}
 	}
@@ -96,7 +95,7 @@ func TestEthashVerifyValid(t *testing.T) {
 
 func TestEthashVerifyInvalid(t *testing.T) {
 	eth := New()
-	if ok, _ := eth.Verify(&invalidZeroDiffBlock); ok {
+	if _, err := eth.Verify(&invalidZeroDiffBlock); err == nil {
 		t.Errorf("should not validate - we just ensure it does not panic on this block")
 	}
 }
@@ -118,7 +117,7 @@ func TestEthashConcurrentVerify(t *testing.T) {
 	wg.Add(100)
 	for i := 0; i < 100; i++ {
 		go func() {
-			if ok, _ := eth.Verify(block); !ok {
+			if _, err := eth.Verify(block); err != nil {
 				t.Error("Block could not be verified")
 			}
 			wg.Done()
@@ -169,7 +168,7 @@ func TestEthashConcurrentSearch(t *testing.T) {
 
 	block.nonce = res.n
 	block.mixDigest = common.BytesToHash(res.md)
-	if ok, _ := eth.Verify(block); !ok {
+	if _, err := eth.Verify(block); err != nil {
 		t.Error("Block could not be verified")
 	}
 }
@@ -187,7 +186,7 @@ func TestEthashSearchAcrossEpoch(t *testing.T) {
 		nonce, md := eth.Search(block, nil, 0)
 		block.nonce = nonce
 		block.mixDigest = common.BytesToHash(md)
-		if ok, _ := eth.Verify(block); !ok {
+		if _, err := eth.Verify(block); err != nil {
 			t.Fatalf("Block could not be verified")
 		}
 	}
