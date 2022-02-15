@@ -168,6 +168,48 @@ func (l *Light) Verify(block Block) (common.Hash, error) {
 	return result, nil
 }
 
+// EthStratumVerify checks whether the block's nonce is valid for an ethstratum derived block.
+func (l *Light) EthStratumVerify(block Block) (common.Hash, error) {
+	// TODO: do ethash_quick_verify before getCache in order
+	// to prevent DOS attacks.
+	blockNum := block.NumberU64()
+	if blockNum >= epochLength*2048 {
+		log.Debug(fmt.Sprintf("block number %d too high, limit is %d", blockNum, epochLength*2048))
+		return common.Hash{}, fmt.Errorf("block number %d too high, limit is %d", blockNum, epochLength*2048)
+	}
+
+	difficulty := block.Difficulty()
+	/* Cannot happen if block header diff is validated prior to PoW, but can
+		 happen if PoW is checked first due to parallel PoW checking.
+		 We could check the minimum valid difficulty but for SoC we avoid (duplicating)
+	   Ethereum protocol consensus rules here which are not in scope of Ethash
+	*/
+	if difficulty.Cmp(common.Big0) == 0 {
+		return common.Hash{}, fmt.Errorf("invalid block difficulty: 0")
+	}
+
+	cache := l.getCache(blockNum)
+	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
+	if l.test {
+		dagSize = dagSizeForTesting
+	}
+	// Recompute the hash using the cache.
+	ok, _, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	if !ok {
+		return common.Hash{}, fmt.Errorf("unable to compute hash")
+	}
+
+	// NB: MixDigest equality is not checked here because the ethstratum job or
+	// share used to create the block provide digest information.
+
+	// The actual check.
+	target := new(big.Int).Div(maxUint256, difficulty)
+	if result.Big().Cmp(target) > 0 {
+		return result, fmt.Errorf("result did not meet target difficulty")
+	}
+	return result, nil
+}
+
 func h256ToHash(in C.ethash_h256_t) common.Hash {
 	return *(*common.Hash)(unsafe.Pointer(&in.b))
 }

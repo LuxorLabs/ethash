@@ -93,9 +93,25 @@ func TestEthashVerifyValid(t *testing.T) {
 	}
 }
 
+func TestEthStratumVerifyValid(t *testing.T) {
+	eth := New()
+	for i, block := range validBlocks {
+		if _, err := eth.EthStratumVerify(block); err != nil {
+			t.Errorf("block %d (%x) did not validate.", i, block.hashNoNonce[:6])
+		}
+	}
+}
+
 func TestEthashVerifyInvalid(t *testing.T) {
 	eth := New()
 	if _, err := eth.Verify(&invalidZeroDiffBlock); err == nil {
+		t.Errorf("should not validate - we just ensure it does not panic on this block")
+	}
+}
+
+func TestEthStratumVerifyInvalid(t *testing.T) {
+	eth := New()
+	if _, err := eth.EthStratumVerify(&invalidZeroDiffBlock); err == nil {
 		t.Errorf("should not validate - we just ensure it does not panic on this block")
 	}
 }
