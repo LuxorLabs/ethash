@@ -168,6 +168,30 @@ func (l *Light) Verify(block Block) (common.Hash, error) {
 	return result, nil
 }
 
+// BlockDifficulty returns the difficulty of the provided block.
+func (l *Light) BlockDifficulty(block Block) (*big.Int, error) {
+	blockNum := block.NumberU64()
+	if blockNum >= epochLength*2048 {
+		log.Debug(fmt.Sprintf("block number %d too high, limit is %d", blockNum, epochLength*2048))
+		return nil, fmt.Errorf("block number %d too high, limit is %d", blockNum, epochLength*2048)
+	}
+
+	cache := l.getCache(block.NumberU64())
+	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
+	if l.test {
+		dagSize = dagSizeForTesting
+	}
+	// Recompute the hash using the cache.
+	ok, _, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	if !ok {
+		return nil, fmt.Errorf("unable to compute hash")
+	}
+
+	diff := new(big.Int).Div(maxUint256, result.Big())
+
+	return diff, nil
+}
+
 func h256ToHash(in C.ethash_h256_t) common.Hash {
 	return *(*common.Hash)(unsafe.Pointer(&in.b))
 }

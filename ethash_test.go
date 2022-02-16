@@ -100,6 +100,20 @@ func TestEthashVerifyInvalid(t *testing.T) {
 	}
 }
 
+func TestBlockDifficulty(t *testing.T) {
+	eth := New()
+	for _, block := range validBlocks {
+		diff, err := eth.BlockDifficulty(block)
+		if err != nil {
+			t.Fatal("calculating block difficulty", err)
+		}
+
+		if diff.Cmp(block.difficulty) < 0 {
+			t.Fatalf("expected difficulty to be greater than block difficulty")
+		}
+	}
+}
+
 func TestEthashConcurrentVerify(t *testing.T) {
 	eth, err := NewForTesting()
 	if err != nil {
