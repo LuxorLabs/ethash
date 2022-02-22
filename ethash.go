@@ -169,13 +169,13 @@ func (l *Light) Verify(block Block) (common.Hash, error) {
 }
 
 // EthStratumVerify checks whether the block's nonce is valid for an ethstratum derived block.
-func (l *Light) EthStratumVerify(block Block) (common.Hash, error) {
+func (l *Light) EthStratumVerify(block Block) (common.Hash, common.Hash, error) {
 	// TODO: do ethash_quick_verify before getCache in order
 	// to prevent DOS attacks.
 	blockNum := block.NumberU64()
 	if blockNum >= epochLength*2048 {
 		log.Debug(fmt.Sprintf("block number %d too high, limit is %d", blockNum, epochLength*2048))
-		return common.Hash{}, fmt.Errorf("block number %d too high, limit is %d", blockNum, epochLength*2048)
+		return common.Hash{}, common.Hash{}, fmt.Errorf("block number %d too high, limit is %d", blockNum, epochLength*2048)
 	}
 
 	difficulty := block.Difficulty()
@@ -185,7 +185,7 @@ func (l *Light) EthStratumVerify(block Block) (common.Hash, error) {
 	   Ethereum protocol consensus rules here which are not in scope of Ethash
 	*/
 	if difficulty.Cmp(common.Big0) == 0 {
-		return common.Hash{}, fmt.Errorf("invalid block difficulty: 0")
+		return common.Hash{}, common.Hash{}, fmt.Errorf("invalid block difficulty: 0")
 	}
 
 	cache := l.getCache(blockNum)
@@ -194,9 +194,9 @@ func (l *Light) EthStratumVerify(block Block) (common.Hash, error) {
 		dagSize = dagSizeForTesting
 	}
 	// Recompute the hash using the cache.
-	ok, _, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	ok, mixDigest, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
 	if !ok {
-		return common.Hash{}, fmt.Errorf("unable to compute hash")
+		return common.Hash{}, common.Hash{}, fmt.Errorf("unable to compute hash")
 	}
 
 	// NB: MixDigest equality is not checked here because the ethstratum job or
@@ -205,9 +205,9 @@ func (l *Light) EthStratumVerify(block Block) (common.Hash, error) {
 	// The actual check.
 	target := new(big.Int).Div(maxUint256, difficulty)
 	if result.Big().Cmp(target) > 0 {
-		return result, fmt.Errorf("result did not meet target difficulty")
+		return common.Hash{}, common.Hash{}, fmt.Errorf("result did not meet target difficulty")
 	}
-	return result, nil
+	return result, mixDigest, nil
 }
 
 func h256ToHash(in C.ethash_h256_t) common.Hash {
